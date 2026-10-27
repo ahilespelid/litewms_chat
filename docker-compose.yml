@@ -62,7 +62,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:?Задайте DB_PASSWORD в .env}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Задайте DB_ROOT_PASSWORD в .env}
     volumes:
-      - db_data:/var/lib/mysql
+      - db:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD}"]
       interval: 5s
@@ -76,13 +76,16 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - redis_data:/data
+      - redis:/data
     networks: [net]
 
 volumes:
-  db_data:
-  redis_data:
+  db:
+    name: litewms_chat_db
+  redis:
+    name: litewms_chat_redis
   storage:
+    name: litewms_chat_storage
 
 networks:
   net:
