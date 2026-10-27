@@ -14,18 +14,29 @@ class ChatAppCreate extends Command
         {--user-conversations : Разрешить участникам самим создавать личные диалоги и группы}
         {--directory : Разрешить поиск по участникам приложения}
         {--accent= : Фирменный цвет интерфейса, например #0f766e}
-        {--title= : Заголовок в интерфейсе (по умолчанию «Чат»)}';
+        {--title= : Заголовок в интерфейсе (по умолчанию «Чат»)}
+        {--login-url= : Адрес сайта, который выдаёт токен входа и возвращает человека в чат (кнопка «Войти через LiteWMS» на /app), например https://test.litewms.ru/lk2/chat/login}';
 
     protected $description = 'Подключить сайт к чату: создаёт приложение и печатает ключи (секреты показываются один раз)';
 
     public function handle(): int
     {
+        $login_url = $this->option('login-url');
+
+        // Кнопка входа уводит человека на этот адрес: принимаем только https-ссылку.
+        if ($login_url && ! preg_match('#^https://[^\s/]+(/\S*)?$#', $login_url)) {
+            $this->components->error('--login-url должен быть полной ссылкой https://…');
+
+            return self::INVALID;
+        }
+
         $settings = array_filter([
             'guest_enabled' => $this->option('guests') ?: null,
             'user_conversations' => $this->option('user-conversations') ?: null,
             'directory' => $this->option('directory') ?: null,
             'accent' => $this->option('accent'),
             'title' => $this->option('title'),
+            'login_url' => $login_url ?: null,
         ], fn ($v) => $v !== null);
 
         ['app' => $app, 'secret' => $secret, 'server_token' => $token] = ChatApp::register(

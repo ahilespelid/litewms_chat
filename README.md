@@ -40,8 +40,11 @@
 
 ```bash
 docker compose exec app php artisan chat:app "ЛК LiteWMS" \
-  --origin=https://litewms.ru --origin=https://test.litewms.ru --guests
+  --origin=https://litewms.ru --origin=https://test.litewms.ru \
+  --login-url=https://test.litewms.ru/lk2/chat/login
 ```
+
+`--login-url` включает кнопку «Войти через LiteWMS» на самостоятельной странице чата (см. ниже), `--guests` разрешает анонимных гостей.
 
 Команда печатает три значения, **секреты показываются один раз**: `app key` (`lw_pub_…`, публичный),
 `secret` (`lws_…`, подпись токенов входа) и `server token` (`lcs_…`, серверный API). Секреты хранятся только на
@@ -83,6 +86,14 @@ jwt.sign({ sub: String(user.id), name: user.name, jti: crypto.randomUUID() }, SE
 jwt.encode({"iss": APP_KEY, "sub": str(user.id), "name": user.name, "iat": now, "exp": now + 120,
             "jti": str(uuid.uuid4())}, SECRET, algorithm="HS256")
 ```
+
+**2а. Отдельный вход в `chat.litewms.ru/app`** (чат без страницы сайта вокруг). Страница показывает кнопку «Войти через LiteWMS» и
+отправляет человека на `login_url` приложения с параметром `return=https://chat.litewms.ru/app?app=…`. Сайт входит в свой аккаунт
+(гостя просит войти), подписывает тот же токен, что и для виджета, и возвращает человека на `return` с токеном во **фрагменте**:
+`https://chat.litewms.ru/app?app=…#token=<JWT>`. Страница меняет токен на Bearer, убирает его из адреса и запоминает вход в браузере.
+Сайт обязан принимать `return` только с адреса самого чата, иначе токен можно увести на чужой сайт. Без `?app=` страница берёт приложение
+само, если оно единственное активное со входом через сайт. Без `login_url` страница как раньше просит открыть чат из кабинета.
+Личные ссылки операторов `/l/{secret}` (команда `chat:operator`) работают без сайта вовсе.
 
 **3. Вставить на страницу.** Плавающая кнопка с счётчиком непрочитанных — в шаблон сайта:
 

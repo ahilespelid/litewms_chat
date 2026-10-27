@@ -36,11 +36,27 @@ class ChatApp extends Model
         'directory' => false,             // поиск по участникам app
         'accent' => '#0f766e',            // фирменный цвет интерфейса
         'title' => 'Чат',
+        'login_url' => null,              // адрес сайта-хозяина для кнопки «Войти через …» на странице /app
     ];
 
     public function setting(string $key, mixed $default = null): mixed
     {
         return ($this->settings ?? [])[$key] ?? (self::DEFAULT_SETTINGS[$key] ?? $default);
+    }
+
+    /**
+     * Приложение, которое открывает страница /app без ?app=.
+     *
+     * Самостоятельная страница чата не принадлежит сайту, поэтому приложение
+     * выбирается само, если оно единственное активное со входом через сайт
+     * (`login_url`). Несколько таких приложений — выбор остаётся за ссылкой
+     * с ?app=, иначе чужое приложение предлагало бы войти не туда.
+     */
+    public static function defaultForLogin(): ?self
+    {
+        $apps = static::where('is_active', true)->get()->filter(fn (self $app) => $app->setting('login_url'));
+
+        return $apps->count() === 1 ? $apps->first() : null;
     }
 
     public function participants(): HasMany

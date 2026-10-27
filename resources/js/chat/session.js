@@ -22,7 +22,8 @@ const store = {
 /**
  * Вход в чат. Источники учётных данных по порядку:
  *   1. личная ссылка /l/{secret} (гости и операторы без сайта-хозяина);
- *   2. ?token= — handoff-токен в адресе (кнопка «Открыть чат» на сайте-хозяине; из адреса вырезается сразу);
+ *   2. #token= (возврат с кнопки «Войти через сайт») или ?token= (кнопка «Открыть чат» на сайте-хозяине) —
+ *      handoff-токен в адресе; из адреса вырезается сразу;
  *   3. сохранённый рабочий токен (только полная страница /app);
  *   4. встроенный режим: запрос handoff-токена у страницы-хозяина через postMessage;
  *   5. гостевая форма, если приложение её разрешает.
@@ -73,9 +74,11 @@ export function createSession({ cfg, bridge, rawFetch }) {
             }
 
             const url = new URL(location.href);
-            const jwt = url.searchParams.get('token');
+            // Фрагмент предпочтительнее запроса: он не попадает в логи серверов и в Referer.
+            const jwt = new URLSearchParams(location.hash.replace(/^#/, '')).get('token') || url.searchParams.get('token');
             if (jwt && !bridge.embedded) {
                 url.searchParams.delete('token');
+                // pathname + search без hash: фрагмент с токеном убирается из адреса вместе с запросом.
                 history.replaceState(null, '', url.pathname + url.search);
                 try {
                     await exchange(jwt);

@@ -63,4 +63,4 @@ echo
 echo "Готово. Контейнеры: litewms_chat, litewms_chat_reverb, litewms_chat_worker, litewms_chat_scheduler, litewms_chat_percona, litewms_chat_redis"
 echo "Сеть: litewms_chat_net (подключите к ней Caddy и добавьте deploy/litewms_chat.caddy в sites.d)."
 echo "Первое приложение чата:"
-echo "  docker compose exec app php artisan chat:app 'ЛК LiteWMS' --origin=https://litewms.ru --origin=https://test.litewms.ru --guests"
+echo "  docker compose exec app php artisan chat:app 'ЛК LiteWMS' --origin=https://litewms.ru --origin=https://test.litewms.ru --login-url=https://test.litewms.ru/lk2/chat/login"

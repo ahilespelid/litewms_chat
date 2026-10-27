@@ -53,12 +53,27 @@
     <template x-if="phase === 'need-login'">
         <div class="m-auto max-w-sm px-6 text-center">
             <p class="text-base font-semibold text-slate-800">Войдите на сайте</p>
-            <p class="mt-2 text-sm text-slate-500">Чат открывается из вашего личного кабинета. Вернитесь в кабинет и нажмите «Чат», либо откройте личную ссылку, которую вам выдали.</p>
+            <template x-if="canLoginViaSite">
+                <div>
+                    <p class="mt-2 text-sm text-slate-500">Вход проходит через ваш личный кабинет: он подтвердит, кто вы, и вернёт вас сюда.</p>
+                    <p x-show="error" x-text="error" class="mt-3 text-sm text-red-600"></p>
+                    <button type="button" class="mt-5 w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-dark" @click="loginViaSite()" x-text="loginLabel"></button>
+                </div>
+            </template>
+            <template x-if="!canLoginViaSite">
+                <p class="mt-2 text-sm text-slate-500">Чат открывается из вашего личного кабинета. Вернитесь в кабинет и нажмите «Чат», либо откройте личную ссылку, которую вам выдали.</p>
+            </template>
         </div>
     </template>
 
     <template x-if="phase === 'guest-form'">
         <form class="m-auto w-full max-w-sm px-6" @submit.prevent="guestStart()">
+            <template x-if="canLoginViaSite">
+                <div class="mb-6 border-b border-slate-200 pb-6">
+                    <button type="button" class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-dark" @click="loginViaSite()" x-text="loginLabel"></button>
+                    <p class="mt-2 text-center text-xs text-slate-400">или напишите нам без входа</p>
+                </div>
+            </template>
             <p class="text-lg font-semibold text-slate-800">Написать нам</p>
             <p class="mt-1 text-sm text-slate-500">Представьтесь — и откроем диалог. Он сохранится по вашей личной ссылке.</p>
             <label class="mt-5 block text-sm font-medium text-slate-700" for="g-name">Ваше имя</label>

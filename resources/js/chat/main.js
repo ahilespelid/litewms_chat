@@ -189,6 +189,24 @@ function chatApp() {
             this.conversations = res.data;
         },
 
+        /** Есть ли у приложения сайт, через который можно войти (кнопка «Войти через LiteWMS»). */
+        get canLoginViaSite() {
+            return !this.embedded && !!cfg.loginUrl;
+        },
+
+        get loginLabel() {
+            return 'Войти через LiteWMS';
+        },
+
+        /** Уйти на сайт за токеном входа; сайт вернёт на эту же страницу с #token=… */
+        loginViaSite() {
+            const back = new URL('/app', location.origin);
+            if (cfg.appKey) back.searchParams.set('app', cfg.appKey);
+            const target = new URL(cfg.loginUrl);
+            target.searchParams.set('return', back.toString());
+            location.href = target.toString();
+        },
+
         async guestStart() {
             if (!this.guest.name.trim()) return;
             try {

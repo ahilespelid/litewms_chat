@@ -44,9 +44,14 @@ class PageController extends Controller
     {
         $origins = $app?->allowed_origins ?? [];
 
+        // Самостоятельная страница: приложение по ?app= или единственное со входом через сайт.
+        $login_app = $mode === 'page' ? ($this->activeApp($request->query('app')) ?? ChatApp::defaultForLogin()) : null;
+
         $config = [
             'mode' => $mode,
-            'appKey' => $app?->key ?? $this->plainKey($request->query('app')),
+            'appKey' => $app?->key ?? $login_app?->key ?? $this->plainKey($request->query('app')),
+            // Куда отправить человека за токеном входа (null — кнопки «Войти через сайт» нет).
+            'loginUrl' => $login_app?->setting('login_url'),
             'allowedOrigins' => $origins,
             'view' => $request->query('view') === 'thread' ? 'thread' : 'full',
             'accent' => preg_match('/^#[0-9a-f]{6}$/i', (string) $request->query('accent')) ? $request->query('accent') : null,
@@ -69,6 +74,14 @@ class PageController extends Controller
         $response->headers->set('Cache-Control', 'no-store');
 
         return $response;
+    }
+
+    /** Активное приложение по публичному ключу или null. */
+    private function activeApp(mixed $key): ?ChatApp
+    {
+        $key = $this->plainKey($key);
+
+        return $key ? ChatApp::where('key', $key)->where('is_active', true)->first() : null;
     }
 
     private function plainKey(mixed $value): ?string
