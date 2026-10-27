@@ -59,6 +59,11 @@ class AppServiceProvider extends ServiceProvider
             ->withOperationTransformers(function (Operation $operation, RouteInfo $routeInfo) {
                 $uri = $routeInfo->route->uri();
 
+                // Scramble добавляет тег по имени контроллера (Auth, Message…) рядом с нашим @tags:
+                // оставляем только наш, иначе каждый метод показывается в двух группах.
+                $own = array_values(array_filter($operation->tags, fn ($t) => preg_match('/[^\x00-\x7F]/', $t)));
+                $operation->tags = $own ?: ['Прочее'];
+
                 if (str_contains($uri, '/server/')) {
                     $operation->security = [new SecurityRequirement(['server' => []])];
                 } elseif (in_array('auth:sanctum', $routeInfo->route->gatherMiddleware(), true)) {

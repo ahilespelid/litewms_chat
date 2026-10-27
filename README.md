@@ -1,7 +1,7 @@
 # LiteWMS Chat
 
 Отдельный сервис обмена сообщениями для LiteWMS и любых других сайтов. Живёт на своём поддомене
-(`chat.litewms.ru`), имеет собственный REST API со Swagger (годится и для будущего мобильного приложения)
+(`chat.litewms.ru`), имеет собственный REST API со Swagger-документацией (`/docs`)
 и подключается к любому месту любого сайта одной строкой `<script>`.
 
 Построен на идеях [ahilespelid/messenger](https://github.com/ahilespelid/messenger), но это отдельный проект:
