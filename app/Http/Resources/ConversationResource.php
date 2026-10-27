@@ -58,6 +58,8 @@ class ConversationResource extends JsonResource
                 : null,
             /** Непрочитанные именно для того, кто смотрит. */
             'unread_count' => (int) ($c->unread_count ?? 0),
+            /** Можно ли удалить диалог у всех (DELETE …?scope=all): оператор в поддержке, создатель в личном и группе. */
+            'can_delete_for_all' => $viewer ? app(\App\Services\ConversationService::class)->canDeleteForAll($c, $viewer) : false,
             'muted' => isset($c->muted_until) && $c->muted_until && now()->lt($c->muted_until),
             'last_message_at' => $c->last_message_at?->toIso8601String(),
             'created_at' => $c->created_at->toIso8601String(),

@@ -22,6 +22,7 @@
         <symbol id="i-checks" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m2 12.5 4.5 4.5L16 7.5M10 15.5l1.5 1.5L21 7.5"/></symbol>
         <symbol id="i-reply" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M9 8 4 13l5 5M4 13h10a6 6 0 0 1 6 6v0"/></symbol>
         <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m4 20 4-1L19.5 7.5a2.1 2.1 0 0 0-3-3L5 16l-1 4zM14 6l4 4"/></symbol>
+        <symbol id="i-dots" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 12 7zm0 6.6a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2zm0 6.6a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
         <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></symbol>
         <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" d="M6 4h4v16H6zM14 4h4v16h-4z"/></symbol>
@@ -153,7 +154,7 @@
 
                 <template x-if="active">
                     <div class="flex min-h-0 flex-1 flex-col">
-                        <header class="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-2.5">
+                        <header class="relative flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-2.5">
                             <button type="button" x-show="layout === 'full'" @click="closeThread()" class="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden" aria-label="К списку диалогов"><svg class="h-5 w-5"><use href="#i-back"/></svg></button>
                             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" :style="`background:${avatarColor(active.title)}`" x-text="initials(active.title)"></span>
                             <div class="min-w-0 flex-1">
@@ -168,6 +169,13 @@
                             <a x-show="active.context?.url" :href="active.context?.url" target="_blank" rel="noopener" class="hidden shrink-0 items-center gap-1 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent-dark hover:bg-accent-mid sm:flex" :title="active.context?.title">
                                 <svg class="h-4 w-4"><use href="#i-link"/></svg><span class="max-w-40 truncate" x-text="active.context?.title || 'Открыть'"></span>
                             </a>
+                            <div class="relative shrink-0" @click.outside="convMenu = false" @keydown.escape.window="convMenu = false">
+                                <button type="button" @click="convMenu = !convMenu" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Действия с диалогом" aria-haspopup="menu" :aria-expanded="convMenu"><svg class="h-5 w-5"><use href="#i-dots"/></svg></button>
+                                <div x-show="convMenu" x-transition.opacity role="menu" class="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                                    <button type="button" role="menuitem" @click="askDeleteConversation('me')" class="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"><svg class="h-4 w-4 text-slate-400"><use href="#i-trash"/></svg>Удалить для себя</button>
+                                    <button type="button" role="menuitem" x-show="active.can_delete_for_all" @click="askDeleteConversation('all')" class="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"><svg class="h-4 w-4"><use href="#i-trash"/></svg>Удалить навсегда</button>
+                                </div>
+                            </div>
                         </header>
 
                         <div x-show="!connected" class="bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800" role="status">Нет связи — переподключаемся…</div>
@@ -305,6 +313,21 @@
                     <div class="mt-5 grid grid-cols-2 gap-2">
                         <button type="button" x-ref="deleteCancel" @click="deleteTarget = null" class="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200">Отмена</button>
                         <button type="button" @click="remove()" class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" data-confirm-delete>Удалить</button>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Подтверждение удаления диалога --}}
+            <div x-show="convDelete" x-transition.opacity class="absolute inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4"
+                 @keydown.escape.window="convDelete = null" @click.self="convDelete = null">
+                <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="cdel-title" aria-describedby="cdel-text">
+                    <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600"><svg class="h-6 w-6"><use href="#i-trash"/></svg></div>
+                    <h2 id="cdel-title" class="mt-3 text-center text-base font-semibold text-slate-900" x-text="convDelete === 'all' ? 'Удалить диалог навсегда?' : 'Удалить диалог для себя?'"></h2>
+                    <p id="cdel-text" class="mt-1.5 text-center text-sm leading-snug text-slate-500" x-show="convDelete === 'me'">Диалог пропадёт из вашего списка, у остальных останется. Если вам напишут снова, он вернётся, но без прежней переписки.</p>
+                    <p class="mt-1.5 text-center text-sm leading-snug text-slate-500" x-show="convDelete === 'all'">Диалог исчезнет у всех участников, вернуть его из чата будет нельзя.<span x-show="active?.context"> Он привязан к «<span x-text="active?.context?.title || active?.context?.id"></span>»: новое обращение откроет пустой диалог.</span></p>
+                    <div class="mt-5 grid grid-cols-2 gap-2">
+                        <button type="button" x-ref="convDeleteCancel" @click="convDelete = null" class="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200">Отмена</button>
+                        <button type="button" @click="deleteConversation()" class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" data-confirm-delete-conversation x-text="convDelete === 'all' ? 'Удалить навсегда' : 'Удалить'"></button>
                     </div>
                 </div>
             </div>

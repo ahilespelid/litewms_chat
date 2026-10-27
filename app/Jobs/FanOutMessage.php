@@ -40,7 +40,7 @@ class FanOutMessage implements ShouldQueue
         $request = Request::create('/');
         $messagePayload = MessageResource::make($message)->resolve($request);
         $members = ConversationMember::with('participant')
-            ->where('conversation_id', $message->conversation_id)->whereNull('left_at')->get();
+            ->where('conversation_id', $message->conversation_id)->whereNull('left_at')->whereNull('hidden_at')->get();
 
         foreach ($members as $member) {
             $viewer = $member->participant;

@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Conversation extends Model
 {
-    use HasUlids;
+    use HasUlids, SoftDeletes;
 
     public const TYPE_DIRECT = 'direct';
     public const TYPE_GROUP = 'group';
@@ -17,7 +18,7 @@ class Conversation extends Model
 
     protected $fillable = [
         'app_id', 'type', 'title', 'context_type', 'context_id', 'context_title', 'context_url',
-        'unique_key', 'created_by', 'last_message_id', 'last_message_at', 'meta', 'archived_at',
+        'unique_key', 'created_by', 'last_message_id', 'last_message_at', 'meta', 'archived_at', 'deleted_by',
     ];
 
     protected function casts(): array

@@ -30,11 +30,12 @@ class ConversationService
             ->join('conversation_members as cm', function ($join) use ($viewer) {
                 $join->on('cm.conversation_id', '=', 'conversations.id')
                     ->where('cm.participant_id', '=', $viewer->id)
-                    ->whereNull('cm.left_at');
+                    ->whereNull('cm.left_at')
+                    ->whereNull('cm.hidden_at');
             })
             ->where('conversations.app_id', $viewer->app_id)
             ->whereNull('conversations.archived_at')
-            ->select('conversations.*', 'cm.muted_until as muted_until')
+            ->select('conversations.*', 'cm.muted_until as muted_until', 'cm.hidden_from_message_id as hidden_from_message_id')
             ->selectRaw("$unread as unread_count")
             ->with(['activeMembers.participant', 'lastMessage.sender', 'creator'])
             ->orderByDesc('conversations.last_message_at')
@@ -142,7 +143,9 @@ class ConversationService
                 $member->last_read_message_id = $conversation->last_message_id;
             }
 
+            // Явное добавление (повторное обращение «Написать складу») возвращает скрытый диалог.
             $member->left_at = null;
+            $member->hidden_at = null;
             $member->save();
         }
     }
@@ -152,6 +155,55 @@ class ConversationService
         ConversationMember::where('conversation_id', $conversation->id)
             ->where('participant_id', $participant->id)
             ->update(['left_at' => now()]);
+    }
+
+    /**
+     * «Удалить для себя»: диалог пропадает из списка участника, у остальных остаётся.
+     * Вернётся с новым сообщением, но прежняя история ему уже не показывается.
+     */
+    public function hideFor(Conversation $conversation, Participant $participant): void
+    {
+        $last = $conversation->last_message_id;
+
+        ConversationMember::where('conversation_id', $conversation->id)
+            ->where('participant_id', $participant->id)
+            ->update(array_filter([
+                'hidden_at' => now(),
+                'hidden_from_message_id' => $last,
+                'last_read_message_id' => $last,
+            ], fn ($v) => $v !== null));
+
+        broadcast(new ChatEvent('participant.'.$participant->id, 'conversation.removed', ['conversation_id' => $conversation->id]));
+    }
+
+    /** Кто может удалить диалог у всех: оператор в поддержке, создатель — в личном диалоге и группе. */
+    public function canDeleteForAll(Conversation $conversation, Participant $viewer): bool
+    {
+        if ($conversation->type === Conversation::TYPE_SUPPORT) {
+            return (bool) $viewer->is_operator;
+        }
+
+        return $conversation->created_by !== null && $conversation->created_by === $viewer->id;
+    }
+
+    /**
+     * «Удалить навсегда»: диалог пропадает у всех (мягкое удаление). Сообщения, вложения и контекст остаются
+     * в базе и на диске как архив — не для показа; участники получают conversation.removed.
+     */
+    public function destroyEverywhere(Conversation $conversation, Participant $by): void
+    {
+        $members = ConversationMember::where('conversation_id', $conversation->id)->pluck('participant_id');
+
+        DB::transaction(function () use ($conversation, $by) {
+            // Ключ освобождается: «Написать складу» по той же заявке откроет новый пустой диалог.
+            $fresh = Conversation::whereKey($conversation->id)->firstOrFail();
+            $fresh->forceFill(['unique_key' => null, 'deleted_by' => $by->id])->save();
+            $fresh->delete();
+        });
+
+        foreach ($members as $id) {
+            broadcast(new ChatEvent('participant.'.$id, 'conversation.removed', ['conversation_id' => $conversation->id]));
+        }
     }
 
     /** Ключ идемпотентности для диалогов, которые участник открывает сам (поддержка / личный). */
@@ -173,10 +225,12 @@ class ConversationService
             ->join('conversation_members as cm', function ($join) use ($viewer) {
                 $join->on('cm.conversation_id', '=', 'm.conversation_id')
                     ->where('cm.participant_id', '=', $viewer->id)
-                    ->whereNull('cm.left_at');
+                    ->whereNull('cm.left_at')
+                    ->whereNull('cm.hidden_at');
             })
             ->join('conversations as c', 'c.id', '=', 'm.conversation_id')
             ->whereNull('c.archived_at')
+            ->whereNull('c.deleted_at')
             ->whereRaw('m.id > coalesce(cm.last_read_message_id, 0)')
             ->where(fn ($q) => $q->whereNull('m.participant_id')->orWhereColumn('m.participant_id', '<>', 'cm.participant_id'))
             ->whereNull('m.deleted_at')

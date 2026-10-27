@@ -41,6 +41,9 @@ class MessageService
                 'last_message_at' => $message->created_at,
             ])->save();
 
+            // Новое сообщение возвращает диалог тем, кто его «удалил для себя».
+            ConversationMember::where('conversation_id', $conversation->id)->whereNotNull('hidden_at')->update(['hidden_at' => null]);
+
             // Своё сообщение — прочитано отправителем (иначе оно «непрочитанное» на его втором устройстве).
             if ($sender) {
                 ConversationMember::where('conversation_id', $conversation->id)
@@ -149,7 +152,7 @@ class MessageService
     public function stream(Message $message)
     {
         $path = $message->isVoice() ? $message->voice_path : $message->file_path;
-        abort_unless($path && ! $message->deleted_at && Storage::disk('local')->exists($path), 404);
+        abort_unless($path && ! $message->deleted_at && $message->conversation()->exists() && Storage::disk('local')->exists($path), 404);
 
         if ($message->isVoice()) {
             return Storage::disk('local')->response($path, null, [

@@ -67,6 +67,8 @@ function chatApp() {
         toast: '',
         layout: cfg.view === 'thread' ? 'thread' : 'full',
         deleteTarget: null,
+        convMenu: false,
+        convDelete: null, // 'me' | 'all' — ждём подтверждения удаления диалога
 
         // ——— вычисляемое
         get active() {
@@ -498,6 +500,27 @@ function chatApp() {
             if (!m) return;
             try {
                 this.replace((await api.del(`/conversations/${this.activeId}/messages/${m.id}`)).data);
+            } catch (e) {
+                this.flash(e.text);
+            }
+        },
+
+        // ——— удаление диалога
+        askDeleteConversation(scope) {
+            this.convMenu = false;
+            this.convDelete = scope;
+            this.$nextTick(() => this.$refs.convDeleteCancel?.focus());
+        },
+
+        async deleteConversation() {
+            const scope = this.convDelete;
+            const c = this.active;
+            this.convDelete = null;
+            if (!scope || !c) return;
+            try {
+                await api.del(`/conversations/${c.id}?scope=${scope}`);
+                this.removeConversation(c.id);
+                this.flash(scope === 'all' ? 'Диалог удалён у всех' : 'Диалог удалён для вас');
             } catch (e) {
                 this.flash(e.text);
             }

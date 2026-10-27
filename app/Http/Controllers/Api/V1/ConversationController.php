@@ -137,6 +137,32 @@ class ConversationController extends ApiController
     }
 
     /**
+     * Удалить диалог
+     *
+     * `scope=me` (по умолчанию) — «удалить для себя»: диалог пропадает из вашего списка, у остальных остаётся.
+     * Новое сообщение вернёт его в список, но прежняя история вам уже не покажется.
+     *
+     * `scope=all` — «удалить навсегда»: диалог пропадает у всех и недоступен ни через интерфейс, ни через API. Сообщения и контекст
+     * остаются в базе только как архив (мягкое удаление), не для показа.
+     * Разрешено оператору (диалог поддержки) и создателю (личный диалог, группа), см. `can_delete_for_all`.
+     */
+    public function destroy(Request $request, string $conversation): JsonResponse
+    {
+        $c = $this->conversation($request, $conversation);
+        $me = $this->viewer($request);
+        $scope = $request->validate(['scope' => ['nullable', Rule::in(['me', 'all'])]])['scope'] ?? 'me';
+
+        if ($scope === 'all') {
+            abort_unless($this->conversations->canDeleteForAll($c, $me), 403, 'Удалить диалог у всех может оператор или создатель диалога.');
+            $this->conversations->destroyEverywhere($c, $me);
+        } else {
+            $this->conversations->hideFor($c, $me);
+        }
+
+        return response()->json(['message' => 'ok']);
+    }
+
+    /**
      * Добавить участников в группу
      *
      * Только владелец группы и только если сайт-хозяин разрешил `user_conversations`.

@@ -38,6 +38,11 @@ class MessageController extends ApiController
 
         $query = Message::where('conversation_id', $c->id)->with(['sender', 'replyTo.sender']);
 
+        // Диалог, который участник «удалял для себя», показывает только то, что написано после этого.
+        if ($c->hidden_from_message_id) {
+            $query->where('id', '>', $c->hidden_from_message_id);
+        }
+
         if (isset($data['after'])) {
             $items = $query->where('id', '>', $data['after'])->orderBy('id')->limit($limit)->get();
         } else {

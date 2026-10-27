@@ -7,11 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConversationMember extends Model
 {
-    protected $fillable = ['conversation_id', 'participant_id', 'role', 'last_read_message_id', 'muted_until', 'left_at'];
+    protected $fillable = ['conversation_id', 'participant_id', 'role', 'last_read_message_id', 'muted_until', 'left_at', 'hidden_at', 'hidden_from_message_id'];
 
     protected function casts(): array
     {
-        return ['muted_until' => 'datetime', 'left_at' => 'datetime'];
+        return ['muted_until' => 'datetime', 'left_at' => 'datetime', 'hidden_at' => 'datetime'];
     }
 
     public function conversation(): BelongsTo

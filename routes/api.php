@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function () {
         Route::post('conversations', [ConversationController::class, 'store'])->name('conversations.store');
         Route::get('conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
         Route::patch('conversations/{conversation}', [ConversationController::class, 'update'])->name('conversations.update');
+        Route::delete('conversations/{conversation}', [ConversationController::class, 'destroy'])->name('conversations.destroy');
         Route::post('conversations/{conversation}/members', [ConversationController::class, 'addMembers'])->name('conversations.members.store');
         Route::delete('conversations/{conversation}/members/{participant}', [ConversationController::class, 'removeMember'])->whereNumber('participant')->name('conversations.members.destroy');
 
