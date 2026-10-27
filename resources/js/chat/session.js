@@ -117,7 +117,7 @@ export function createSession({ cfg, bridge, rawFetch }) {
                 return 'ready';
             }
 
-            return cfg.appKey ? 'guest-form' : 'need-login';
+            return cfg.appKey && cfg.guestEnabled ? 'guest-form' : 'need-login';
         },
 
         async guest(name, email) {

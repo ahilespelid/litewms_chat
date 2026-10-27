@@ -77,6 +77,16 @@ class SiteLoginTest extends TestCase
         $this->assertNull($config['loginUrl']);
     }
 
+    public function test_гостевая_форма_предлагается_только_если_гости_включены(): void
+    {
+        ['app' => $closed] = $this->makeApp();
+        $this->assertFalse($this->pageConfig('/app?app='.$closed->key)['guestEnabled']);
+
+        ['app' => $open] = $this->makeApp(['guest_enabled' => true], [], 'Открытое');
+        $this->assertTrue($this->pageConfig('/app?app='.$open->key)['guestEnabled']);
+        $this->assertFalse($this->pageConfig('/app?app=lw_pub_unknown')['guestEnabled'], 'неизвестное приложение гостей не принимает');
+    }
+
     public function test_отключённое_приложение_не_предлагает_вход(): void
     {
         ['app' => $app] = $this->makeApp(['login_url' => self::LOGIN_URL]);

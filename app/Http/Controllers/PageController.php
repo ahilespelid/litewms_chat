@@ -52,6 +52,8 @@ class PageController extends Controller
             'appKey' => $app?->key ?? $login_app?->key ?? $this->plainKey($request->query('app')),
             // Куда отправить человека за токеном входа (null — кнопки «Войти через сайт» нет).
             'loginUrl' => $login_app?->setting('login_url'),
+            // Форма «Написать нам» (гость без входа) — только если приложение это разрешило.
+            'guestEnabled' => (bool) ($app ?? $login_app ?? $this->activeApp($request->query('app')))?->setting('guest_enabled'),
             'allowedOrigins' => $origins,
             'view' => $request->query('view') === 'thread' ? 'thread' : 'full',
             'accent' => preg_match('/^#[0-9a-f]{6}$/i', (string) $request->query('accent')) ? $request->query('accent') : null,
