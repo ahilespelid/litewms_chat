@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+@source '../views';
+@source '../js';
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --color-accent: var(--accent);
+    --color-accent-dark: color-mix(in srgb, var(--accent) 80%, black);
+    --color-accent-soft: color-mix(in srgb, var(--accent) 10%, white);
+    --color-accent-mid: color-mix(in srgb, var(--accent) 22%, white);
+}
+
+:root {
+    --accent: #0f766e;
+}
+
+[x-cloak] { display: none !important; }
+
+html, body { height: 100%; }
+body { margin: 0; background: #fff; color: #0f172a; -webkit-font-smoothing: antialiased; }
+
+/* Фон ленты: едва заметный узор, как в мессенджерах */
+.lw-thread-bg {
+    background-color: #f4f7f6;
+    background-image: radial-gradient(circle at 1px 1px, rgb(15 118 110 / .07) 1px, transparent 0);
+    background-size: 22px 22px;
+}
+
+.lw-bubble { max-width: min(78%, 34rem); overflow-wrap: anywhere; }
+.lw-bubble a { text-decoration: underline; }
+.lw-scroll { overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgb(100 116 139 / .35) transparent; }
+
+@keyframes lw-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+.lw-typing i { display: inline-block; width: 5px; height: 5px; margin-right: 3px; border-radius: 50%; background: currentColor; animation: lw-dot 1.2s infinite; }
+.lw-typing i:nth-child(2) { animation-delay: .15s; }
+.lw-typing i:nth-child(3) { animation-delay: .3s; }
+
+@keyframes lw-rec { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.lw-rec-dot { animation: lw-rec 1s infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .lw-typing i, .lw-rec-dot { animation: none; }
+}
