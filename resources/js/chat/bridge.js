@@ -9,6 +9,18 @@
  * Безопасность: принимаем сообщения только от window.parent и только с origin из списка приложения;
  * адрес родителя запоминаем из его первого же подтверждённого сообщения и дальше шлём строго ему.
  */
+/** Совпадение origin с записью списка; https://*.example.ru разрешает любые поддомены (как в CSP frame-ancestors). */
+export function originAllowed(list, origin) {
+    return list.some((pattern) => {
+        if (pattern === origin) return true;
+        const i = pattern.indexOf('://*.');
+        if (i < 0) return false;
+        const scheme = pattern.slice(0, i);
+        const suffix = pattern.slice(i + 5).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp('^' + scheme.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\/\\/([a-z0-9-]+\\.)+' + suffix + '$', 'i').test(origin);
+    });
+}
+
 export function createBridge(cfg) {
     const embedded = cfg.mode === 'embed' && window.parent !== window;
     const handlers = {};
@@ -22,7 +34,7 @@ export function createBridge(cfg) {
 
     window.addEventListener('message', (event) => {
         if (!embedded || event.source !== window.parent) return;
-        if (!(cfg.allowedOrigins || []).includes(event.origin)) return;
+        if (!originAllowed(cfg.allowedOrigins || [], event.origin)) return;
 
         const msg = event.data;
         if (!msg || msg.lwchat !== 1 || typeof msg.type !== 'string') return;

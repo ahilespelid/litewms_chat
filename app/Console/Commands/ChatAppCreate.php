@@ -30,6 +30,15 @@ class ChatAppCreate extends Command
             return self::INVALID;
         }
 
+        // Сайты: https://host[:port], шаблон поддоменов https://*.example.ru, http только для localhost.
+        foreach ($this->option('origin') as $origin) {
+            if (! ChatApp::validOrigin(rtrim($origin, '/'))) {
+                $this->components->error("--origin $origin: нужен адрес вида https://host[:port] или шаблон https://*.example.ru");
+
+                return self::INVALID;
+            }
+        }
+
         $settings = array_filter([
             'guest_enabled' => $this->option('guests') ?: null,
             'user_conversations' => $this->option('user-conversations') ?: null,

@@ -69,14 +69,50 @@ class ChatApp extends Model
         return $this->hasMany(Conversation::class, 'app_id');
     }
 
-    /** Origin вида https://host[:port] входит в список разрешённых. Пустой список — браузерам нельзя. */
+    /**
+     * Origin вида https://host[:port] входит в список разрешённых. Пустой список — браузерам нельзя.
+     * Запись https://*.example.ru разрешает любой поддомен example.ru (схема и порт те же), сам example.ru не входит.
+     */
     public function originAllowed(?string $origin): bool
     {
         if ($origin === null || $origin === '') {
             return false;
         }
 
-        return in_array(rtrim($origin, '/'), array_map(fn ($o) => rtrim($o, '/'), $this->allowed_origins ?? []), true);
+        foreach ($this->allowed_origins ?? [] as $allowed) {
+            if (self::originMatches(rtrim($allowed, '/'), rtrim($origin, '/'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Допустимая запись списка: https://host[:port], http только для localhost, или шаблон https://*.example.ru. */
+    public static function validOrigin(string $origin): bool
+    {
+        $host = '([a-z0-9-]+\.)+[a-z0-9-]+';
+
+        return (bool) (
+            preg_match('#^https://'.$host.'(:\d+)?$#i', $origin)
+            || preg_match('#^https://\*\.'.$host.'(:\d+)?$#i', $origin)
+            || preg_match('#^http://(localhost|127\.0\.0\.1)(:\d+)?$#i', $origin)
+        );
+    }
+
+    public static function originMatches(string $pattern, string $origin): bool
+    {
+        if ($pattern === $origin) {
+            return true;
+        }
+
+        if (! str_contains($pattern, '://*.')) {
+            return false;
+        }
+
+        [$scheme, $suffix] = explode('://*.', $pattern, 2);
+
+        return (bool) preg_match('#^'.preg_quote($scheme, '#').'://([a-z0-9-]+\.)+'.preg_quote($suffix, '#').'$#i', $origin);
     }
 
     public static function hashServerToken(string $token): string

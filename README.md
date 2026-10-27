@@ -119,6 +119,9 @@ JS API: `LWChat.init({app, tokenUrl | tokenProvider, accent, position, label})`,
 
 Чат грузится в sandbox-iframe; показывать его могут только сайты из `--origin` (заголовок CSP `frame-ancestors`),
 обмен с родительской страницей — `postMessage` с проверкой origin в обе стороны.
+Если сайт живёт на множестве поддоменов (кабинеты арендаторов), в `--origin` можно дать шаблон `https://*.example.ru`:
+он покрывает любые поддомены (схема и порт те же), но не сам `example.ru`. Список сайтов хранится в БД (поле `allowed_origins` приложения)
+и меняется без пересоздания приложения и ключей: `php artisan chat:origin list|add|remove https://сайт [--app=lw_pub_…]`.
 
 ## Серверный API (для бэкенда сайта)
 
