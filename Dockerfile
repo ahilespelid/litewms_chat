@@ -24,6 +24,8 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 COPY . .
 COPY --from=frontend /app/public/build ./public/build
+# Swagger UI кладётся рядом (npm run build -> scripts/copy-swagger.mjs); public/vendor в git не хранится
+COPY --from=frontend /app/public/vendor ./public/vendor
 RUN composer dump-autoload --optimize --no-dev
 
 ########################################
