@@ -1,0 +1,89 @@
+# chat.litewms.ru. Наружу порты не публикуются: контейнеры доступны только в сети litewms_chat_net,
+# к которой подключён внешний Caddy (он выдаёт TLS и проксирует: /app/* -> reverb, остальное -> app).
+name: litewms_chat
+
+x-app: &app
+  build: .
+  image: litewms_chat:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  env_file: .env
+  networks: [net]
+
+services:
+  app:
+    <<: *app
+    container_name: litewms_chat
+    command: ["app"]
+    volumes:
+      - storage:/app/storage
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/up >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  reverb:
+    <<: *app
+    container_name: litewms_chat_reverb
+    command: ["reverb"]
+    healthcheck: { disable: true }
+    depends_on:
+      app: { condition: service_healthy }
+
+  worker:
+    <<: *app
+    container_name: litewms_chat_worker
+    command: ["queue"]
+    healthcheck: { disable: true }
+    volumes:
+      - storage:/app/storage
+    depends_on:
+      app: { condition: service_healthy }
+
+  scheduler:
+    <<: *app
+    container_name: litewms_chat_scheduler
+    command: ["scheduler"]
+    healthcheck: { disable: true }
+    depends_on:
+      app: { condition: service_healthy }
+
+  db:
+    image: percona/percona-server:8.4
+    container_name: litewms_chat_percona
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-litewms_chat}
+      MYSQL_USER: ${DB_USERNAME:-litewms_chat}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Задайте DB_PASSWORD в .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Задайте DB_ROOT_PASSWORD в .env}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [net]
+
+  redis:
+    image: redis:8-alpine
+    container_name: litewms_chat_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks: [net]
+
+volumes:
+  db_data:
+  redis_data:
+  storage:
+
+networks:
+  net:
+    name: litewms_chat_net

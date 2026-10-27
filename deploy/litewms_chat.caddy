@@ -1,0 +1,23 @@
+# /etc/caddy/sites.d/litewms_chat.caddy — отдельный поддомен чата. TLS выдаёт Caddy сам.
+# Контейнер Caddy должен быть подключён к сети litewms_chat_net:
+#   docker network connect litewms_chat_net <имя_контейнера_caddy>
+chat.litewms.ru {
+	encode zstd gzip
+
+	# WebSocket Reverb (laravel-echo / pusher-js ходят на /app/<key>)
+	@ws path /app/*
+	handle @ws {
+		reverse_proxy litewms_chat_reverb:8080
+	}
+
+	handle {
+		reverse_proxy litewms_chat:80 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Загрузки файлов/голосовых до ~25 МБ
+	request_body {
+		max_size 32MB
+	}
+}
