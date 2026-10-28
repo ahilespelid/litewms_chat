@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Message extends Model
 {
@@ -15,7 +16,7 @@ class Message extends Model
     protected $fillable = [
         'conversation_id', 'participant_id', 'type', 'body', 'original_body', 'reply_to_id', 'client_uuid',
         'voice_path', 'voice_mime', 'voice_duration', 'file_path', 'file_name', 'file_mime', 'file_size',
-        'edited_at', 'deleted_at',
+        'edited_at', 'deleted_at', 'forwarded_from_name', 'forwarded_from_message_id',
     ];
 
     protected function casts(): array
@@ -31,6 +32,11 @@ class Message extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(Participant::class, 'participant_id');
+    }
+
+    public function share(): HasOne
+    {
+        return $this->hasOne(MessageShare::class);
     }
 
     public function replyTo(): BelongsTo

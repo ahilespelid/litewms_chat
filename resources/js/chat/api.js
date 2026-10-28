@@ -45,6 +45,7 @@ export function createApi({ base = '/api/v1', getToken, getSocketId, onUnauthori
     return {
         get: (path, query) => request('GET', path, { query }),
         post: (path, json) => request('POST', path, { json: json ?? {} }),
+        put: (path, json) => request('PUT', path, { json }),
         patch: (path, json) => request('PATCH', path, { json }),
         del: (path) => request('DELETE', path, {}),
         upload: (path, form) => request('POST', path, { form }),

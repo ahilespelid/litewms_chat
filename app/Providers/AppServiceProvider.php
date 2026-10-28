@@ -33,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
         // Вход: перебор токенов/ссылок ограничиваем по IP.
         RateLimiter::for('chat-auth', fn (Request $r) => Limit::perMinute(30)->by($r->ip()));
         // Обычные запросы клиента — по участнику (фронт дёргает API часто: список, история, read).
+        // Перебор паролей к ссылке «Поделиться»: считается по адресу и ссылке.
+        RateLimiter::for('chat-share', fn (Request $r) => Limit::perMinute(20)->by($r->ip().'|'.$r->route('token')));
+
         RateLimiter::for('chat-api', fn (Request $r) => Limit::perMinute(600)->by($r->user()?->id ?: $r->ip()));
         // Отправка сообщений и файлов.
         RateLimiter::for('chat-send', fn (Request $r) => Limit::perMinute(90)->by($r->user()?->id ?: $r->ip()));

@@ -68,6 +68,9 @@ function chatApp() {
         layout: cfg.view === 'thread' ? 'thread' : 'full',
         deleteTarget: null,
         convMenu: false,
+        msgMenu: null, // id сообщения, у которого открыто меню «⋮»
+        fwd: null, // { message, selected: [], query: '', sending: false }
+        shareDlg: null, // { message, loading, saving, link, form: { access, expires_in, password, clear_password }, error }
         convDelete: null, // 'me' | 'all' — ждём подтверждения удаления диалога
 
         // ——— вычисляемое
@@ -228,7 +231,10 @@ function chatApp() {
 
         // ——— диалоги
         sortConversations() {
-            this.conversations.sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''));
+            // Закреплённые вверху (свежее закрепление выше), остальные по времени последнего сообщения.
+            this.conversations.sort((a, b) => (!!b.pinned - !!a.pinned)
+                || (a.pinned ? (b.pinned_at || '').localeCompare(a.pinned_at || '') : 0)
+                || (b.last_message_at || '').localeCompare(a.last_message_at || ''));
         },
 
         upsertConversation(c) {
@@ -503,6 +509,140 @@ function chatApp() {
             } catch (e) {
                 this.flash(e.text);
             }
+        },
+
+        // ——— закрепление
+        async togglePin(c) {
+            this.convMenu = false;
+            if (!c) return;
+            try {
+                this.upsertConversation((await api.patch(`/conversations/${c.id}`, { pinned: !c.pinned })).data);
+            } catch (e) {
+                this.flash(e.text);
+            }
+        },
+
+        // ——— копирование, пересылка, «поделиться»
+        async copyMessage(m) {
+            this.msgMenu = null;
+            const text = m.body || '';
+            if (!text) return;
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch {
+                // Нет доступа к буферу (http, iframe без разрешения): копируем через скрытое поле.
+                const t = document.createElement('textarea');
+                t.value = text;
+                t.style.position = 'fixed';
+                t.style.opacity = '0';
+                document.body.appendChild(t);
+                t.select();
+                const ok = document.execCommand && document.execCommand('copy');
+                t.remove();
+                if (!ok) return this.flash('Не удалось скопировать');
+            }
+            this.flash('Скопировано');
+        },
+
+        canForward(m) {
+            return !!m.id && !m.deleted && m.type !== 'system';
+        },
+
+        askForward(m) {
+            this.msgMenu = null;
+            this.fwd = { message: m, selected: [], query: '', sending: false };
+        },
+
+        get fwdList() {
+            const q = (this.fwd?.query || '').trim().toLowerCase();
+
+            return this.conversations.filter((c) => !q || c.title.toLowerCase().includes(q));
+        },
+
+        async forward() {
+            const f = this.fwd;
+            if (!f || !f.selected.length || f.sending) return;
+            f.sending = true;
+            try {
+                const res = await api.post(`/conversations/${f.message.conversation_id || this.activeId}/messages/${f.message.id}/forward`, { conversation_ids: f.selected });
+                for (const m of res.data) if (m.conversation_id === this.activeId) this.onMessage({ message: m }, true);
+                this.fwd = null;
+                this.flash(res.data.length > 1 ? `Переслано в ${res.data.length} диалога` : 'Переслано');
+            } catch (e) {
+                f.sending = false;
+                this.flash(e.text);
+            }
+        },
+
+        async openShare(m) {
+            this.msgMenu = null;
+            this.shareDlg = { message: m, loading: true, saving: false, link: null, error: '', copied: false, form: { access: 'members', expires_in: '', password: '', clear_password: false } };
+            try {
+                const link = (await api.get(`/conversations/${this.activeId}/messages/${m.id}/share`)).data;
+                this.shareDlg.link = link;
+                if (link) {
+                    this.shareDlg.form.access = link.access;
+                    this.shareDlg.form.expires_in = '';
+                }
+            } catch (e) {
+                this.shareDlg = null;
+                this.flash(e.text);
+
+                return;
+            }
+            this.shareDlg.loading = false;
+        },
+
+        async saveShare() {
+            const d = this.shareDlg;
+            if (!d || d.saving) return;
+            d.saving = true;
+            d.error = '';
+            const body = { access: d.form.access };
+            // Срок: пустое значение у существующей ссылки оставляет прежний, «без срока» — 'never'.
+            if (d.form.expires_in === 'never') body.expires_in = null;
+            else if (d.form.expires_in) body.expires_in = Number(d.form.expires_in);
+            if (d.form.password) body.password = d.form.password;
+            if (d.form.clear_password) body.clear_password = true;
+            try {
+                d.link = (await api.put(`/conversations/${this.activeId}/messages/${d.message.id}/share`, body)).data;
+                d.form.password = '';
+                d.form.clear_password = false;
+                d.form.expires_in = '';
+                if (d.link) await this.copyShare();
+            } catch (e) {
+                d.error = e.text;
+            }
+            d.saving = false;
+        },
+
+        async copyShare() {
+            const d = this.shareDlg;
+            if (!d?.link) return;
+            try {
+                await navigator.clipboard.writeText(d.link.url);
+                d.copied = true;
+                setTimeout(() => d && (d.copied = false), 2500);
+            } catch {
+                this.$refs.shareUrl?.select();
+                d.error = 'Скопируйте ссылку вручную: она выделена.';
+            }
+        },
+
+        async stopShare() {
+            const d = this.shareDlg;
+            if (!d?.link) return;
+            try {
+                await api.del(`/conversations/${this.activeId}/messages/${d.message.id}/share`);
+                d.link = null;
+                this.flash('Ссылка отключена');
+            } catch (e) {
+                d.error = e.text;
+            }
+        },
+
+        shareUntil(link) {
+            return link?.expires_at ? new Date(link.expires_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'без срока';
         },
 
         // ——— удаление диалога

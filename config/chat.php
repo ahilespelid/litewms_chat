@@ -11,6 +11,9 @@ return [
     'max_tokens_per_participant' => (int) env('CHAT_MAX_TOKENS', 10),
 
     'message_max_length' => 4000,
+
+    // Сколько диалогов участник может закрепить вверху списка.
+    'pinned_max' => 5,
     'file_max_kb' => (int) env('CHAT_FILE_MAX_KB', 25600),
     'voice_max_kb' => 10240,
     'voice_max_seconds' => 300,

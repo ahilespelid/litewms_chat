@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Events\ChatEvent;
 use App\Http\Resources\ConversationResource;
 use App\Models\Conversation;
+use App\Models\ConversationMember;
 use App\Models\Participant;
 use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
@@ -112,7 +113,8 @@ class ConversationController extends ApiController
     /**
      * Изменить диалог: название группы, выключить уведомления
      *
-     * `muted_until` — до какого момента не присылать push (null — включить обратно).
+     * `muted_until` — до какого момента не присылать push (null — включить обратно). `pinned` — закрепить диалог вверху
+     * своего списка (до `pinned_max` штук, у каждого участника свои закрепления).
      */
     public function update(Request $request, string $conversation): ConversationResource
     {
@@ -122,6 +124,7 @@ class ConversationController extends ApiController
         $data = $request->validate([
             'title' => ['sometimes', 'string', 'max:190'],
             'muted_until' => ['sometimes', 'nullable', 'date'],
+            'pinned' => ['sometimes', 'boolean'],
         ]);
 
         if (array_key_exists('title', $data)) {
@@ -131,6 +134,18 @@ class ConversationController extends ApiController
 
         if (array_key_exists('muted_until', $data)) {
             $c->memberFor($me)->forceFill(['muted_until' => $data['muted_until']])->save();
+        }
+
+        if (array_key_exists('pinned', $data)) {
+            $pinned = (bool) $data['pinned'];
+            if ($pinned && empty($c->pinned_at)) {
+                $limit = (int) config('chat.pinned_max');
+                $count = ConversationMember::where('participant_id', $me->id)->whereNull('left_at')->whereNull('hidden_at')->whereNotNull('pinned_at')->count();
+                abort_if($count >= $limit, 422, "Можно закрепить не больше $limit диалогов.");
+            }
+            $c->memberFor($me)->forceFill(['pinned_at' => $pinned ? ($c->pinned_at ?: now()) : null])->save();
+            // Остальные устройства участника перестроят список.
+            $this->conversations->announce($c, [$me->id]);
         }
 
         return ConversationResource::make($this->conversations->findFor($me, $c->id));

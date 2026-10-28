@@ -35,6 +35,16 @@ class PageController extends Controller
         return $this->chat($request, 'embed', $app);
     }
 
+    /** Страница сообщения по ссылке «Поделиться»: само сообщение она запрашивает у API, чтобы права проверялись в одном месте. */
+    public function shared()
+    {
+        return response()->view('shared')
+            ->header('Content-Security-Policy', "frame-ancestors 'none'")
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('X-Robots-Tag', 'noindex, nofollow')
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function docs()
     {
         return view('pages.docs');

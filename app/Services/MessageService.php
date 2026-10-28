@@ -13,6 +13,7 @@ use App\Models\Participant;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 
 class MessageService
@@ -86,6 +87,46 @@ class MessageService
             'client_uuid' => $clientUuid,
             'reply_to_id' => $replyTo,
         ]);
+    }
+
+    /**
+     * Пересылка в другой диалог от имени пересылающего. У копии остаётся автор оригинала («Переслано от …»),
+     * при пересылке пересланного — автор самого первого сообщения. Вложение копируется в новый файл:
+     * удаление оригинала копию не ломает.
+     */
+    public function forward(Message $source, Conversation $target, Participant $by): Message
+    {
+        abort_if($source->deleted_at || $source->type === Message::TYPE_SYSTEM, 422, 'Это сообщение переслать нельзя.');
+
+        $attrs = [
+            'type' => $source->type,
+            'body' => $source->body,
+            'forwarded_from_name' => $source->forwarded_from_name ?: ($source->sender?->name ?: 'Система'),
+            'forwarded_from_message_id' => $source->forwarded_from_message_id ?: $source->id,
+        ];
+
+        $disk = Storage::disk('local');
+        $copied = null;
+
+        if ($source->isVoice() || $source->isFile()) {
+            $from = $source->isVoice() ? $source->voice_path : $source->file_path;
+            abort_unless($from && $disk->exists($from), 422, 'Файл сообщения недоступен.');
+
+            $ext = pathinfo($from, PATHINFO_EXTENSION);
+            $copied = dirname($from).'/'.Str::uuid().($ext ? '.'.$ext : '');
+            $disk->copy($from, $copied);
+
+            $attrs += $source->isVoice()
+                ? ['voice_path' => $copied, 'voice_mime' => $source->voice_mime, 'voice_duration' => $source->voice_duration]
+                : ['file_path' => $copied, 'file_name' => $source->file_name, 'file_mime' => $source->file_mime, 'file_size' => $source->file_size];
+        }
+
+        try {
+            return $this->send($target, $by, $attrs);
+        } catch (\Throwable $e) {
+            $copied && $disk->delete($copied);
+            throw $e;
+        }
     }
 
     public function edit(Message $message, string $body): Message

@@ -28,6 +28,8 @@ class MessageResource extends JsonResource
             /** Текст до первой правки: обе стороны видят, что поменялось. */
             'original_body' => ! $deleted && $m->edited_at ? $m->original_body : null,
             'sender' => $m->participant_id ? ParticipantResource::make($m->sender)->resolve($request) : null,
+            /** Автор оригинала, если сообщение переслано; иначе null. */
+            'forwarded_from' => $m->forwarded_from_name,
             'reply_to' => $this->replyPreview($m),
             'voice' => $m->isVoice() && ! $deleted ? [
                 'url' => $this->mediaUrl($m),

@@ -60,6 +60,9 @@ class ConversationResource extends JsonResource
             'unread_count' => (int) ($c->unread_count ?? 0),
             /** Можно ли удалить диалог у всех (DELETE …?scope=all): оператор в поддержке, создатель в личном и группе. */
             'can_delete_for_all' => $viewer ? app(\App\Services\ConversationService::class)->canDeleteForAll($c, $viewer) : false,
+            /** Закреплён ли диалог у меня: закреплённые идут в списке первыми. */
+            'pinned' => ! empty($c->pinned_at),
+            'pinned_at' => ! empty($c->pinned_at) ? \Illuminate\Support\Carbon::parse($c->pinned_at)->toIso8601String() : null,
             'muted' => isset($c->muted_until) && $c->muted_until && now()->lt($c->muted_until),
             'last_message_at' => $c->last_message_at?->toIso8601String(),
             'created_at' => $c->created_at->toIso8601String(),

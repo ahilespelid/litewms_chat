@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\MiscController;
 use App\Http\Controllers\Api\V1\Server\ServerController;
+use App\Http\Controllers\Api\V1\ShareController;
+use App\Http\Controllers\Api\V1\SharedMessageController;
 use App\Http\Middleware\AuthenticateApp;
 use App\Http\Middleware\EnsureParticipantActive;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +27,8 @@ Route::prefix('v1')->group(function () {
         Route::post('guest', [AuthController::class, 'guest'])->name('guest');
         Route::post('link', [AuthController::class, 'link'])->name('link');
     });
+
+    Route::post('shared/{token}', [SharedMessageController::class, 'show'])->middleware('throttle:chat-share')->where('token', '[a-z0-9]{20,64}')->name('api.v1.shared');
 
     Route::get('media/{message}', [MessageController::class, 'media'])->middleware('signed')->whereNumber('message')->name('chat.media');
 
@@ -51,6 +55,10 @@ Route::prefix('v1')->group(function () {
         });
         Route::patch('conversations/{conversation}/messages/{message}', [MessageController::class, 'update'])->whereNumber('message')->name('messages.update');
         Route::delete('conversations/{conversation}/messages/{message}', [MessageController::class, 'destroy'])->whereNumber('message')->name('messages.destroy');
+        Route::post('conversations/{conversation}/messages/{message}/forward', [MessageController::class, 'forward'])->whereNumber('message')->middleware('throttle:chat-send')->name('messages.forward');
+        Route::get('conversations/{conversation}/messages/{message}/share', [ShareController::class, 'show'])->whereNumber('message')->name('messages.share.show');
+        Route::put('conversations/{conversation}/messages/{message}/share', [ShareController::class, 'update'])->whereNumber('message')->name('messages.share.update');
+        Route::delete('conversations/{conversation}/messages/{message}/share', [ShareController::class, 'destroy'])->whereNumber('message')->name('messages.share.destroy');
         Route::get('conversations/{conversation}/messages/{message}/reveal', [MessageController::class, 'reveal'])->whereNumber('message')->name('messages.reveal');
         Route::post('conversations/{conversation}/read', [MessageController::class, 'read'])->name('conversations.read');
         Route::post('conversations/{conversation}/typing', [MessageController::class, 'typing'])->name('conversations.typing');

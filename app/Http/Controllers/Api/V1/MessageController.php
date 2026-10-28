@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Events\ChatEvent;
 use App\Http\Resources\MessageResource;
 use App\Models\Message;
+use App\Services\ConversationService;
 use App\Services\MessageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -131,6 +132,7 @@ class MessageController extends ApiController
     {
         $m = $this->ownMessage($request, $conversation, $message);
         abort_unless($m->type === Message::TYPE_TEXT, 422, 'Редактировать можно только текст.');
+        abort_if($m->forwarded_from_name !== null, 422, 'Пересланное сообщение редактировать нельзя.');
 
         $data = $request->validate(['body' => ['required', 'string', 'max:'.config('chat.message_max_length')]]);
 
@@ -162,6 +164,33 @@ class MessageController extends ApiController
         $m = Message::where('conversation_id', $c->id)->findOrFail($message);
 
         return response()->json(['data' => ['id' => $m->id, 'body' => $m->body, 'original_body' => $m->original_body, 'deleted_at' => $m->deleted_at?->toIso8601String()]]);
+    }
+
+    /**
+     * Переслать сообщение
+     *
+     * В один или несколько своих диалогов (`conversation_ids`, до 10). Копия уходит от вашего имени с пометкой
+     * «Переслано от …» (автор оригинала), текст, файл и голосовое копируются. Удалённые и системные сообщения
+     * переслать нельзя, пересланное нельзя редактировать.
+     */
+    public function forward(Request $request, string $conversation, int $message): JsonResponse
+    {
+        $c = $this->conversation($request, $conversation);
+        $me = $this->viewer($request);
+        $data = $request->validate([
+            'conversation_ids' => ['required', 'array', 'min:1', 'max:10'],
+            'conversation_ids.*' => ['string', 'distinct'],
+        ]);
+
+        $source = Message::with('sender')->where('conversation_id', $c->id)
+            ->when($c->hidden_from_message_id, fn ($q, $from) => $q->where('id', '>', $from))->findOrFail($message);
+
+        $targets = collect($data['conversation_ids'])->map(fn ($id) => app(ConversationService::class)->findFor($me, $id));
+        abort_if($targets->contains(null), 404, 'Диалог не найден.');
+
+        $sent = $targets->map(fn ($target) => $this->messages->forward($source, $target, $me)->load(['sender', 'replyTo.sender']));
+
+        return MessageResource::collection($sent)->response()->setStatusCode(201);
     }
 
     /**
