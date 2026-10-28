@@ -118,21 +118,27 @@
 
                 <ul class="lw-scroll min-h-0 flex-1 overflow-y-auto" role="list">
                     <template x-for="c in filtered" :key="c.id">
-                        <li>
-                            <button type="button" @click="openConversation(c.id)" :class="c.id === activeId ? 'bg-accent-soft' : 'hover:bg-slate-50'"
+                        <li class="group relative" :draggable="canDrag(c)" :class="{ 'opacity-50': dragId === c.id, 'border-t-2 border-accent': dragOver === c.id }"
+                            @dragstart="dragStart($event, c)" @dragenter.prevent="dragEnter(c)" @dragover.prevent="dragEnter(c)" @drop.prevent="drop(c)" @dragend="dragEnd()"
+                            @contextmenu.prevent="openListMenu($event, c)" @touchstart.passive="pressStart($event, c)" @touchend="pressEnd()" @touchmove.passive="pressEnd()" @touchcancel="pressEnd()">
+                            <button type="button" @click="rowClick(c)" :class="c.id === activeId ? 'bg-accent-soft' : 'hover:bg-slate-50'"
                                     class="flex w-full items-center gap-3 px-4 py-3 text-left">
                                 <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" :style="`background:${avatarColor(c.title)}`" x-text="initials(c.title)"></span>
                                 <span class="min-w-0 flex-1">
                                     <span class="flex items-baseline gap-2">
                                         <span class="min-w-0 flex-1 truncate text-sm font-semibold" x-text="c.title"></span>
                                         <svg x-show="c.pinned" class="h-3.5 w-3.5 shrink-0 text-slate-400" role="img" aria-label="Закреплён"><use href="#i-pin"/></svg>
-                                        <span class="shrink-0 text-xs text-slate-400" x-text="listTime(c.last_message?.created_at || c.last_message_at)"></span>
+                                        <span class="shrink-0 text-xs text-slate-400 group-hover:invisible group-focus-within:invisible" x-text="listTime(c.last_message?.created_at || c.last_message_at)"></span>
                                     </span>
                                     <span class="mt-0.5 flex items-center gap-2">
                                         <span class="min-w-0 flex-1 truncate text-sm" :class="c.unread_count ? 'font-medium text-slate-800' : 'text-slate-500'" x-text="preview(c)"></span>
                                         <span x-show="c.unread_count" x-text="c.unread_count > 99 ? '99+' : c.unread_count" class="min-w-5 shrink-0 rounded-full bg-accent px-1.5 text-center text-xs font-semibold leading-5 text-white"></span>
                                     </span>
                                 </span>
+                            </button>
+                            <button type="button" data-testid="row-pin" @click.stop="togglePin(c)" class="absolute right-2 top-2 hidden rounded-md p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 group-hover:block group-focus-within:block"
+                                    :title="c.pinned ? 'Открепить' : 'Закрепить'" :aria-label="(c.pinned ? 'Открепить диалог ' : 'Закрепить диалог ') + c.title">
+                                <svg class="h-4 w-4" :class="c.pinned ? 'text-accent' : ''"><use href="#i-pin"/></svg>
                             </button>
                         </li>
                     </template>
@@ -141,6 +147,17 @@
                         <span x-show="conversations.length">Ничего не найдено.</span>
                     </li>
                 </ul>
+
+                <div x-show="listMenu" x-cloak x-transition.opacity role="menu" data-testid="list-menu" @click.outside="listMenu && Date.now() - listMenu.t > 400 && (listMenu = null)" @keydown.escape.window="listMenu = null"
+                     class="fixed z-40 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl" :style="listMenu ? `left:${listMenu.x}px;top:${listMenu.y}px` : ''">
+                    <button type="button" role="menuitem" @click="togglePinFromList(listMenuConv)" class="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"><svg class="h-4 w-4 text-slate-400"><use href="#i-pin"/></svg><span x-text="listMenuConv?.pinned ? 'Открепить' : 'Закрепить'"></span></button>
+                    <template x-if="listMenuConv?.pinned">
+                        <div>
+                            <button type="button" role="menuitem" @click="movePin(listMenuConv, -1)" :disabled="pinnedIds.indexOf(listMenuConv.id) === 0" class="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:text-slate-300 disabled:hover:bg-white"><span class="w-4 text-center text-slate-400">↑</span>Выше среди закреплённых</button>
+                            <button type="button" role="menuitem" @click="movePin(listMenuConv, 1)" :disabled="pinnedIds.indexOf(listMenuConv.id) === pinnedIds.length - 1" class="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:text-slate-300 disabled:hover:bg-white"><span class="w-4 text-center text-slate-400">↓</span>Ниже среди закреплённых</button>
+                        </div>
+                    </template>
+                </div>
 
                 <footer x-show="!embedded && me" class="flex items-center gap-2 border-t border-slate-200 px-4 py-2 text-xs text-slate-500">
                     <span class="min-w-0 flex-1 truncate" x-text="me.name + (me.role ? ' · ' + me.role : '')"></span>

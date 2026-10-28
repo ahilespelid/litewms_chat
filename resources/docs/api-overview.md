@@ -45,7 +45,7 @@ return response()->json(['token' => \Firebase\JWT\JWT::encode([
 
 ## Закрепление, пересылка и «Поделиться»
 
-`PATCH /conversations/{id}` с `pinned: true|false` закрепляет диалог вверху вашего списка (не больше 5, у каждого свои закрепления).
+`PATCH /conversations/{id}` с `pinned: true|false` закрепляет диалог вверху вашего списка (без ограничения по числу, у каждого свои закрепления; свежезакреплённый встаёт наверх). `PUT /conversations/pinned-order` с `conversation_ids` (id закреплённых сверху вниз) задаёт их порядок, в диалоге это поле `pin_order`; другие устройства получают событие `pinned.reordered`.
 `POST /conversations/{id}/messages/{message}/forward` с `conversation_ids` пересылает сообщение в ваши диалоги: копия приходит от вашего имени с полем `forwarded_from` (автор оригинала), файл и голосовое копируются, пересланное редактировать нельзя.
 `PUT /conversations/{id}/messages/{message}/share` делает ссылку на своё сообщение (`GET` — настройки, `DELETE` — отключить): `access` = `members` (участники диалога), `app` (любой вошедший в чат) или `anyone` (все по ссылке), `expires_in` в секундах и необязательный `password`. Открывает ссылку `POST /shared/{token}` без токена (для `anyone`) или с Bearer-токеном; ошибки приходят с полем `code`.
 

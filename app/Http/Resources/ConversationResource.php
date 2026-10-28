@@ -62,6 +62,8 @@ class ConversationResource extends JsonResource
             'can_delete_for_all' => $viewer ? app(\App\Services\ConversationService::class)->canDeleteForAll($c, $viewer) : false,
             /** Закреплён ли диалог у меня: закреплённые идут в списке первыми. */
             'pinned' => ! empty($c->pinned_at),
+            /** Место среди закреплённых (0 — самый верхний); для незакреплённых null. */
+            'pin_order' => ! empty($c->pinned_at) && isset($c->pin_order) ? (int) $c->pin_order : null,
             'pinned_at' => ! empty($c->pinned_at) ? \Illuminate\Support\Carbon::parse($c->pinned_at)->toIso8601String() : null,
             'muted' => isset($c->muted_until) && $c->muted_until && now()->lt($c->muted_until),
             'last_message_at' => $c->last_message_at?->toIso8601String(),

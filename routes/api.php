@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('conversations', [ConversationController::class, 'index'])->name('conversations.index');
         Route::post('conversations', [ConversationController::class, 'store'])->name('conversations.store');
+        Route::put('conversations/pinned-order', [ConversationController::class, 'reorderPinned'])->name('conversations.pinned-order');
         Route::get('conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
         Route::patch('conversations/{conversation}', [ConversationController::class, 'update'])->name('conversations.update');
         Route::delete('conversations/{conversation}', [ConversationController::class, 'destroy'])->name('conversations.destroy');
