@@ -47,12 +47,71 @@ class MessageActionsTest extends TestCase
         $this->assertSame($c1, $ids($ha)[0], 'закреплённый наверху, хотя написали в другой');
         $this->assertSame($c3, $ids($hb)[0], 'у собеседника порядок прежний');
 
-        config(['chat.pinned_max' => 1]);
-        $this->patchJson("/api/v1/conversations/$c2", ['pinned' => true], $ha)->assertUnprocessable();
         $this->patchJson("/api/v1/conversations/$c1", ['pinned' => true], $ha)->assertOk();
 
         $this->patchJson("/api/v1/conversations/$c1", ['pinned' => false], $ha)->assertOk()->assertJsonPath('data.pinned', false);
         $this->assertSame($c3, $ids($ha)[0]);
+    }
+
+    public function test_закреплять_можно_сколько_угодно_новое_встаёт_наверх(): void
+    {
+        ['app' => $app] = $this->makeApp(['user_conversations' => true]);
+        [, $ha] = $this->actor($app, 'a');
+        [$b] = $this->actor($app, 'b');
+        $cs = [];
+        for ($i = 0; $i < 8; $i++) {
+            $cs[] = $c = $this->group($ha, [$b->id], "Чат $i");
+            $this->patchJson("/api/v1/conversations/$c", ['pinned' => true], $ha)->assertOk()->assertJsonPath('data.pinned', true);
+        }
+        $ids = collect($this->getJson('/api/v1/conversations', $ha)->json('data'))->pluck('id')->all();
+        $this->assertSame(array_reverse($cs), $ids, 'последнее закреплённое — выше всех');
+    }
+
+    public function test_порядок_закреплённых_меняется_и_у_каждого_свой(): void
+    {
+        ['app' => $app] = $this->makeApp(['user_conversations' => true]);
+        [, $ha] = $this->actor($app, 'a');
+        [$b, $hb] = $this->actor($app, 'b');
+        $c1 = $this->group($ha, [$b->id], 'Первый');
+        $c2 = $this->group($ha, [$b->id], 'Второй');
+        $c3 = $this->group($ha, [$b->id], 'Третий');
+        $c4 = $this->group($ha, [$b->id], 'Четвёртый');
+        foreach ([$c1, $c2, $c3] as $c) {
+            $this->patchJson("/api/v1/conversations/$c", ['pinned' => true], $ha)->assertOk();
+        }
+        $this->patchJson("/api/v1/conversations/$c1", ['pinned' => true], $hb)->assertOk();
+        $ids = fn ($h) => collect($this->getJson('/api/v1/conversations', $h)->json('data'))->pluck('id')->all();
+        $this->assertSame([$c3, $c2, $c1, $c4], $ids($ha));
+
+        // c4 не закреплён — его id игнорируется; пропущенный c2 остаётся ниже.
+        $this->putJson('/api/v1/conversations/pinned-order', ['conversation_ids' => [$c1, $c4, $c3]], $ha)
+            ->assertOk()->assertJsonPath('data.conversation_ids', [$c1, $c3, $c2]);
+        $this->assertSame([$c1, $c3, $c2, $c4], $ids($ha));
+        $this->assertSame([0, 1, 2], collect($this->getJson('/api/v1/conversations', $ha)->json('data'))->take(3)->pluck('pin_order')->all());
+        $this->assertNull($this->getJson('/api/v1/conversations', $ha)->json('data.3.pin_order'));
+
+        $this->assertSame($c1, $ids($hb)[0], 'у собеседника порядок и закрепление свои');
+        $this->assertContains($c4, $ids($hb));
+
+        // Открепили — выпал из порядка, повторное закрепление снова наверху.
+        $this->patchJson("/api/v1/conversations/$c1", ['pinned' => false], $ha)->assertOk()->assertJsonPath('data.pin_order', null);
+        $this->patchJson("/api/v1/conversations/$c1", ['pinned' => true], $ha)->assertOk()->assertJsonPath('data.pin_order', 0);
+        $this->assertSame([$c1, $c3, $c2, $c4], $ids($ha));
+    }
+
+    public function test_порядок_закреплённых_требует_массив_и_не_трогает_чужие_диалоги(): void
+    {
+        ['app' => $app] = $this->makeApp(['user_conversations' => true]);
+        [, $ha] = $this->actor($app, 'a');
+        [$b, $hb] = $this->actor($app, 'b');
+        $c = $this->group($ha, [$b->id]);
+        $this->patchJson("/api/v1/conversations/$c", ['pinned' => true], $hb)->assertOk();
+
+        $this->putJson('/api/v1/conversations/pinned-order', [], $ha)->assertUnprocessable();
+        $this->putJson('/api/v1/conversations/pinned-order', ['conversation_ids' => [$c, 'нет-такого']], $ha)
+            ->assertOk()->assertJsonPath('data.conversation_ids', []);
+        $this->assertSame($c, $this->getJson('/api/v1/conversations', $hb)->json('data.0.id'));
+        $this->putJson('/api/v1/conversations/pinned-order', ['conversation_ids' => []])->assertUnauthorized();
     }
 
     public function test_удаление_для_себя_снимает_закрепление(): void

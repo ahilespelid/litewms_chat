@@ -114,7 +114,7 @@ class ConversationController extends ApiController
      * Изменить диалог: название группы, выключить уведомления
      *
      * `muted_until` — до какого момента не присылать push (null — включить обратно). `pinned` — закрепить диалог вверху
-     * своего списка (до `pinned_max` штук, у каждого участника свои закрепления).
+     * своего списка (без ограничения по числу, у каждого участника свои закрепления; порядок — `PUT /conversations/pinned-order`).
      */
     public function update(Request $request, string $conversation): ConversationResource
     {
@@ -138,17 +138,53 @@ class ConversationController extends ApiController
 
         if (array_key_exists('pinned', $data)) {
             $pinned = (bool) $data['pinned'];
-            if ($pinned && empty($c->pinned_at)) {
-                $limit = (int) config('chat.pinned_max');
-                $count = ConversationMember::where('participant_id', $me->id)->whereNull('left_at')->whereNull('hidden_at')->whereNotNull('pinned_at')->count();
-                abort_if($count >= $limit, 422, "Можно закрепить не больше $limit диалогов.");
+            $member = $c->memberFor($me);
+            if ($pinned && empty($member->pinned_at)) {
+                // Лимита нет; свежезакреплённый встаёт на самый верх, как в Telegram.
+                $top = ConversationMember::where('participant_id', $me->id)->whereNotNull('pinned_at')->min('pin_order');
+                $member->forceFill(['pinned_at' => now(), 'pin_order' => $top === null ? 0 : (int) $top - 1])->save();
+            } elseif (! $pinned) {
+                $member->forceFill(['pinned_at' => null, 'pin_order' => null])->save();
             }
-            $c->memberFor($me)->forceFill(['pinned_at' => $pinned ? ($c->pinned_at ?: now()) : null])->save();
             // Остальные устройства участника перестроят список.
             $this->conversations->announce($c, [$me->id]);
         }
 
         return ConversationResource::make($this->conversations->findFor($me, $c->id));
+    }
+
+    /**
+     * Порядок закреплённых
+     *
+     * Задаёт порядок закреплённых диалогов в моём списке: `conversation_ids` — id закреплённых диалогов сверху вниз.
+     * Диалоги, которых нет в массиве, остаются ниже в прежнем порядке; незакреплённые и чужие id игнорируются.
+     * Лимита на число закреплённых нет. Остальные устройства получают событие `pinned.reordered`.
+     */
+    public function reorderPinned(Request $request): JsonResponse
+    {
+        $me = $this->viewer($request);
+        $data = $request->validate([
+            'conversation_ids' => ['required', 'array', 'max:1000'],
+            'conversation_ids.*' => ['string', 'distinct'],
+        ]);
+
+        $members = ConversationMember::where('participant_id', $me->id)
+            ->whereNull('left_at')->whereNull('hidden_at')->whereNotNull('pinned_at')
+            ->orderByRaw('(pin_order is null) asc')->orderBy('pin_order')->orderByDesc('pinned_at')->get()->keyBy('conversation_id');
+
+        $ids = collect($data['conversation_ids'])->filter(fn ($id) => $members->has($id))->values();
+        $ids = $ids->merge($members->keys()->diff($ids))->values();
+
+        foreach ($ids as $position => $id) {
+            if ((int) ($members[$id]->pin_order ?? -1) !== $position || $members[$id]->pin_order === null) {
+                $members[$id]->forceFill(['pin_order' => $position])->save();
+            }
+        }
+
+        // Другие устройства участника перестроят закреплённые одним событием.
+        broadcast(new ChatEvent('participant.'.$me->id, 'pinned.reordered', ['conversation_ids' => $ids->all()]))->toOthers();
+
+        return response()->json(['data' => ['conversation_ids' => $ids->all()]]);
     }
 
     /**

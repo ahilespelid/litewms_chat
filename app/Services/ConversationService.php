@@ -35,10 +35,12 @@ class ConversationService
             })
             ->where('conversations.app_id', $viewer->app_id)
             ->whereNull('conversations.archived_at')
-            ->select('conversations.*', 'cm.muted_until as muted_until', 'cm.hidden_from_message_id as hidden_from_message_id', 'cm.pinned_at as pinned_at')
+            ->select('conversations.*', 'cm.muted_until as muted_until', 'cm.hidden_from_message_id as hidden_from_message_id', 'cm.pinned_at as pinned_at', 'cm.pin_order as pin_order')
             ->selectRaw("$unread as unread_count")
             ->with(['activeMembers.participant', 'lastMessage.sender', 'creator'])
             ->orderByRaw('(cm.pinned_at is null) asc')
+            ->orderByRaw('(cm.pin_order is null) asc')
+            ->orderBy('cm.pin_order')
             ->orderByDesc('cm.pinned_at')
             ->orderByDesc('conversations.last_message_at')
             ->orderByDesc('conversations.id');
@@ -169,7 +171,7 @@ class ConversationService
 
         ConversationMember::where('conversation_id', $conversation->id)
             ->where('participant_id', $participant->id)
-            ->update(['pinned_at' => null] + array_filter([
+            ->update(['pinned_at' => null, 'pin_order' => null] + array_filter([
                 'hidden_at' => now(),
                 'hidden_from_message_id' => $last,
                 'last_read_message_id' => $last,

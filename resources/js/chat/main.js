@@ -68,6 +68,11 @@ function chatApp() {
         layout: cfg.view === 'thread' ? 'thread' : 'full',
         deleteTarget: null,
         convMenu: false,
+        listMenu: null, // { id, x, y } — меню строки списка (ПКМ / долгое нажатие)
+        dragId: null, // перетаскиваемый закреплённый диалог
+        dragOver: null, // над каким закреплённым сейчас курсор
+        pressTimer: null,
+        pressed: false,
         msgMenu: null, // id сообщения, у которого открыто меню «⋮»
         fwd: null, // { message, selected: [], query: '', sending: false }
         shareDlg: null, // { message, loading, saving, link, form: { access, expires_in, password, clear_password }, error }
@@ -174,6 +179,7 @@ function chatApp() {
                 'message.read': (e) => this.onRead(e),
                 'conversation.updated': (e) => this.upsertConversation(e.conversation),
                 'conversation.removed': (e) => this.removeConversation(e.conversation_id),
+                'pinned.reordered': (e) => this.applyPinOrder(e.conversation_ids || []),
             });
             realtime.onState((s) => this.onConnection(s));
 
@@ -231,9 +237,10 @@ function chatApp() {
 
         // ——— диалоги
         sortConversations() {
-            // Закреплённые вверху (свежее закрепление выше), остальные по времени последнего сообщения.
+            // Закреплённые вверху в выбранном порядке (pin_order), остальные по времени последнего сообщения.
+            const ord = (c) => (c.pin_order ?? Infinity);
             this.conversations.sort((a, b) => (!!b.pinned - !!a.pinned)
-                || (a.pinned ? (b.pinned_at || '').localeCompare(a.pinned_at || '') : 0)
+                || (a.pinned ? (ord(a) === ord(b) ? 0 : ord(a) < ord(b) ? -1 : 1) || (b.pinned_at || '').localeCompare(a.pinned_at || '') : 0)
                 || (b.last_message_at || '').localeCompare(a.last_message_at || ''));
         },
 
@@ -520,6 +527,112 @@ function chatApp() {
             } catch (e) {
                 this.flash(e.text);
             }
+        },
+
+        get pinnedIds() {
+            return this.conversations.filter((c) => c.pinned).map((c) => c.id);
+        },
+
+        /** Можно ли тащить строку: только закреплённые и только в полном списке (без поиска и фильтра). */
+        canDrag(c) {
+            return !!c.pinned && !this.search.trim() && !this.onlyUnread;
+        },
+
+        /** Проставить порядок закреплённых по списку id (сверху вниз), остальные закреплённые остаются ниже. */
+        applyPinOrder(ids) {
+            const rest = this.pinnedIds.filter((id) => !ids.includes(id));
+            [...ids.filter((id) => this.pinnedIds.includes(id)), ...rest].forEach((id, i) => {
+                const c = this.conversations.find((x) => x.id === id);
+                if (c) c.pin_order = i;
+            });
+            this.sortConversations();
+        },
+
+        async savePinOrder(ids) {
+            this.applyPinOrder(ids);
+            try {
+                await api.put('/conversations/pinned-order', { conversation_ids: this.pinnedIds });
+            } catch (e) {
+                this.flash(e.text);
+                await this.loadConversations().catch(() => {});
+                this.sortConversations();
+            }
+        },
+
+        movePin(c, delta) {
+            this.listMenu = null;
+            const ids = this.pinnedIds;
+            const i = ids.indexOf(c.id);
+            const j = i + delta;
+            if (i < 0 || j < 0 || j >= ids.length) return;
+            ids.splice(j, 0, ids.splice(i, 1)[0]);
+            this.savePinOrder(ids);
+        },
+
+        dragStart(e, c) {
+            if (!this.canDrag(c)) return e.preventDefault();
+            this.dragId = c.id;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', c.id);
+        },
+
+        dragEnter(c) {
+            if (this.dragId && c.pinned && c.id !== this.dragId) this.dragOver = c.id;
+        },
+
+        drop(c) {
+            const from = this.dragId;
+            this.dragId = this.dragOver = null;
+            if (!from || from === c.id || !c.pinned) return;
+            const ids = this.pinnedIds;
+            const fi = ids.indexOf(from);
+            const ti = ids.indexOf(c.id);
+            if (fi < 0 || ti < 0) return;
+            ids.splice(ti, 0, ids.splice(fi, 1)[0]);
+            this.savePinOrder(ids);
+        },
+
+        dragEnd() {
+            this.dragId = this.dragOver = null;
+        },
+
+        // Меню строки списка: правый клик или долгое нажатие на сенсорном экране.
+        openListMenu(e, c) {
+            const x = e.clientX ?? e.touches?.[0]?.clientX ?? 16;
+            const y = e.clientY ?? e.touches?.[0]?.clientY ?? 16;
+            this.listMenu = { t: Date.now(), id: c.id, x: Math.min(x, window.innerWidth - 220), y: Math.min(y, window.innerHeight - 140) };
+        },
+
+        pressStart(e, c) {
+            this.pressed = false;
+            clearTimeout(this.pressTimer);
+            this.pressTimer = setTimeout(() => {
+                this.pressed = true;
+                this.openListMenu(e, c);
+            }, 550);
+        },
+
+        pressEnd() {
+            clearTimeout(this.pressTimer);
+        },
+
+        /** Клик по строке; сразу после долгого нажатия не открываем диалог. */
+        rowClick(c) {
+            if (this.pressed) {
+                this.pressed = false;
+
+                return;
+            }
+            this.openConversation(c.id);
+        },
+
+        get listMenuConv() {
+            return this.listMenu ? this.conversations.find((c) => c.id === this.listMenu.id) : null;
+        },
+
+        async togglePinFromList(c) {
+            this.listMenu = null;
+            await this.togglePin(c);
         },
 
         // ——— копирование, пересылка, «поделиться»
